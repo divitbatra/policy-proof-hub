@@ -195,31 +195,50 @@ const PolicyEdit = ({ policy, onSave }: PolicyEditProps) => {
           </div>
         </div>
 
-        <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
-          <h4 className="font-medium">Upload New Version</h4>
-          <div className="space-y-2">
-            <Label htmlFor="edit-file">Document File</Label>
-            <Input
-              id="edit-file"
-              type="file"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              accept=".pdf,.doc,.docx"
-            />
-          </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Document Editor</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {policy.policy_versions?.find((v: any) => v.id === policy.current_version_id)?.file_url && (
+              <div className="border rounded-lg overflow-hidden bg-background">
+                <iframe
+                  src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+                    policy.policy_versions.find((v: any) => v.id === policy.current_version_id).file_url
+                  )}`}
+                  className="w-full h-[700px]"
+                  title="Document Editor"
+                />
+              </div>
+            )}
+            
+            <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+              <h4 className="font-medium">Upload New Version</h4>
+              <div className="space-y-2">
+                <Label htmlFor="edit-file">Document File</Label>
+                <Input
+                  id="edit-file"
+                  type="file"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  accept=".pdf,.doc,.docx"
+                />
+              </div>
 
-          {file && (
-            <div className="space-y-2">
-              <Label htmlFor="change-summary">Change Summary</Label>
-              <Textarea
-                id="change-summary"
-                value={changeSummary}
-                onChange={(e) => setChangeSummary(e.target.value)}
-                placeholder="Describe what changed in this version..."
-                rows={2}
-              />
+              {file && (
+                <div className="space-y-2">
+                  <Label htmlFor="change-summary">Change Summary</Label>
+                  <Textarea
+                    id="change-summary"
+                    value={changeSummary}
+                    onChange={(e) => setChangeSummary(e.target.value)}
+                    placeholder="Describe what changed in this version..."
+                    rows={2}
+                  />
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </CardContent>
+        </Card>
 
         <div className="flex gap-2">
           <Button onClick={handleSave} disabled={loading} className="flex-1">

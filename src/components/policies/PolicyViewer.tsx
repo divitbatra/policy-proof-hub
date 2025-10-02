@@ -84,32 +84,43 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
           {currentVersion && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Current Version Document</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <FileText className="h-8 w-8 text-primary" />
-                    <div>
-                      <p className="font-medium">{currentVersion.file_name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {(currentVersion.file_size / 1024).toFixed(2)} KB
-                      </p>
-                      {currentVersion.published_at && (
-                        <p className="text-xs text-muted-foreground">
-                          Published: {format(new Date(currentVersion.published_at), "PPP")}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">Current Version Document</CardTitle>
                   <Button
                     variant="outline"
+                    size="sm"
                     onClick={() => handleDownload(currentVersion.file_url, currentVersion.file_name)}
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Download
                   </Button>
                 </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                    <FileText className="h-5 w-5 text-primary" />
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{currentVersion.file_name}</p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span>{(currentVersion.file_size / 1024).toFixed(2)} KB</span>
+                        {currentVersion.published_at && (
+                          <span>Published: {format(new Date(currentVersion.published_at), "PPP")}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* PDF Viewer */}
+                  <div className="border rounded-lg overflow-hidden bg-background">
+                    <iframe
+                      src={currentVersion.file_url}
+                      className="w-full h-[800px]"
+                      title="Policy Document Viewer"
+                    />
+                  </div>
+                </div>
+                
                 {currentVersion.change_summary && (
                   <div className="p-4 bg-muted rounded-lg">
                     <p className="text-sm font-medium mb-1">Change Summary:</p>
