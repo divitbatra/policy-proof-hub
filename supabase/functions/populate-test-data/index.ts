@@ -100,16 +100,18 @@ Deno.serve(async (req) => {
 
     // Delete test users from auth (should work now that all related data is gone)
     for (const userId of testUserIds) {
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
-      if (error) {
-        console.error(`Error deleting user ${userId}:`, error.message)
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(userId)
+        console.log(`Deleted user ${userId}`)
+      } catch (error) {
+        console.error(`Error deleting user ${userId}:`, error)
       }
     }
     
     console.log('Cleanup complete')
 
-    // Wait for deletions to propagate
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // Wait longer for auth deletions to fully propagate
+    await new Promise(resolve => setTimeout(resolve, 5000))
 
     // 2. Create Groups
     console.log('Creating groups...')
@@ -158,6 +160,12 @@ Deno.serve(async (req) => {
         })
 
         if (authError) {
+          // If user already exists, skip instead of failing
+          if (authError.message?.includes('already been registered')) {
+            console.log(`User ${email} already exists, skipping...`)
+            userIndex++
+            continue
+          }
           console.error(`Error creating user ${email}:`, authError)
           continue
         }
