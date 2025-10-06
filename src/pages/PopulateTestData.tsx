@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Database, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { supabase } from "@/integrations/supabase/client";
 
 const PopulateTestData = () => {
   const [loading, setLoading] = useState(false);
@@ -17,27 +18,18 @@ const PopulateTestData = () => {
     setResult(null);
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/populate-test-data`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const { data, error } = await supabase.functions.invoke('populate-test-data', {
+        body: {}
+      });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to populate test data');
-      }
+      if (error) throw error;
 
       setResult(data);
       toast.success('Test data populated successfully!');
     } catch (err: any) {
       setError(err.message);
       toast.error('Failed to populate test data');
+      console.error('Population error:', err);
     } finally {
       setLoading(false);
     }
