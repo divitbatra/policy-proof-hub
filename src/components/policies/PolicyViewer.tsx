@@ -120,7 +120,8 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleDownload(currentVersion.file_url, currentVersion.file_name)}
+                    onClick={() => handleDownload(fileUrl, currentVersion.file_name)}
+                    disabled={!fileUrl}
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Download
