@@ -1,11 +1,17 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, Calendar, User } from "lucide-react";
+import { FileText, Download, Calendar, User, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+
+// Configure PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface PolicyViewerProps {
   policy: any;
@@ -15,6 +21,8 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
   const [fileUrl, setFileUrl] = useState<string>("");
   const [fileError, setFileError] = useState<boolean>(false);
   const [blobUrl, setBlobUrl] = useState<string>("");
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(1);
   
   const currentVersion = policy.policy_versions?.find(
     (v: any) => v.id === policy.current_version_id
@@ -185,11 +193,56 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
                         </div>
                       </div>
                     ) : blobUrl ? (
-                      <iframe
-                        src={blobUrl}
-                        className="w-full h-[800px]"
-                        title="Policy Document Viewer"
-                      />
+                      <div className="flex flex-col items-center">
+                        <Document
+                          file={blobUrl}
+                          onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+                          onLoadError={(error) => {
+                            console.error('Error loading PDF:', error);
+                            setFileError(true);
+                            toast.error('Failed to load PDF document');
+                          }}
+                          loading={
+                            <div className="w-full h-[800px] flex items-center justify-center">
+                              <p className="text-muted-foreground">Loading document...</p>
+                            </div>
+                          }
+                        >
+                          <Page
+                            pageNumber={pageNumber}
+                            renderTextLayer={true}
+                            renderAnnotationLayer={true}
+                            className="shadow-lg"
+                            width={Math.min(window.innerWidth * 0.8, 900)}
+                          />
+                        </Document>
+                        
+                        {numPages > 1 && (
+                          <div className="flex items-center gap-4 mt-4 pb-4">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPageNumber(prev => Math.max(prev - 1, 1))}
+                              disabled={pageNumber <= 1}
+                            >
+                              <ChevronLeft className="h-4 w-4 mr-1" />
+                              Previous
+                            </Button>
+                            <span className="text-sm text-muted-foreground">
+                              Page {pageNumber} of {numPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPageNumber(prev => Math.min(prev + 1, numPages))}
+                              disabled={pageNumber >= numPages}
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4 ml-1" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <div className="w-full h-[800px] flex items-center justify-center">
                         <p className="text-muted-foreground">Loading document...</p>
