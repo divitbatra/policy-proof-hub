@@ -13,6 +13,7 @@ interface PolicyViewerProps {
 
 const PolicyViewer = ({ policy }: PolicyViewerProps) => {
   const [fileUrl, setFileUrl] = useState<string>("");
+  const [fileError, setFileError] = useState<boolean>(false);
   
   const currentVersion = policy.policy_versions?.find(
     (v: any) => v.id === policy.current_version_id
@@ -24,7 +25,10 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
       
       // Extract the file path from the full URL
       const urlParts = currentVersion.file_url.split('/policy-documents/');
-      if (urlParts.length < 2) return;
+      if (urlParts.length < 2) {
+        setFileError(true);
+        return;
+      }
       
       const filePath = urlParts[1];
       
@@ -34,12 +38,14 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
       
       if (error) {
         console.error('Error getting signed URL:', error);
-        toast.error('Failed to load policy document');
+        setFileError(true);
+        toast.error('Policy document not found in storage');
         return;
       }
       
       if (data?.signedUrl) {
         setFileUrl(data.signedUrl);
+        setFileError(false);
       }
     };
     
@@ -121,7 +127,7 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
                     variant="outline"
                     size="sm"
                     onClick={() => handleDownload(fileUrl, currentVersion.file_name)}
-                    disabled={!fileUrl}
+                    disabled={!fileUrl || fileError}
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Download
@@ -145,7 +151,22 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
                   
                   {/* PDF Viewer */}
                   <div className="border rounded-lg overflow-hidden bg-background">
-                    {fileUrl ? (
+                    {fileError ? (
+                      <div className="w-full h-[800px] flex items-center justify-center">
+                        <div className="text-center space-y-4 p-8">
+                          <FileText className="h-16 w-16 mx-auto text-muted-foreground" />
+                          <div>
+                            <p className="font-medium text-lg">Document Not Found</p>
+                            <p className="text-muted-foreground mt-2">
+                              This policy document file doesn't exist in storage.
+                            </p>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Please upload a new version using the Edit tab.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : fileUrl ? (
                       <iframe
                         src={fileUrl}
                         className="w-full h-[800px]"
