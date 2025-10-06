@@ -78,91 +78,89 @@ Deno.serve(async (req) => {
       return { ...group, userCount: config?.userCount || 0 }
     })
 
-    // Create Users and assign to groups
+    // Create Users and assign to groups in smaller batches
     console.log('Creating users...')
     let userIndex = 1
     const allUserIds: string[] = []
+    const BATCH_SIZE = 5 // Process 5 users at a time to avoid timeout
 
     for (const group of groupsWithCounts) {
       const userIds: string[] = []
       
-      for (let i = 0; i < group.userCount; i++) {
-        const email = `user${userIndex}@apex-demo.com`
-        const password = 'Demo123!'
-        const fullName = `${group.name} User ${i + 1}`
-        
-        // Create auth user
-        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: true,
-          user_metadata: {
-            full_name: fullName
-          }
-        })
+      // Process users in batches
+      for (let batchStart = 0; batchStart < group.userCount; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, group.userCount)
+        const batchPromises = []
 
-        if (authError) {
-          // If user already exists, fetch their ID instead of failing
-          if (authError.message?.includes('already been registered')) {
-            console.log(`User ${email} already exists, fetching ID...`)
-            const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers()
-            const foundUser = existingUser.users.find(u => u.email === email)
-            if (foundUser) {
-              userIds.push(foundUser.id)
-              allUserIds.push(foundUser.id)
-              
-              // Update profile for existing user
-              await supabaseAdmin
-                .from('profiles')
-                .update({
-                  full_name: fullName,
-                  department: group.name,
-                  role: group.name === 'Admin' ? 'admin' : 'employee'
-                })
-                .eq('id', foundUser.id)
+        for (let i = batchStart; i < batchEnd; i++) {
+          const email = `user${userIndex + i - batchStart}@apex-demo.com`
+          const password = 'Demo123!'
+          const fullName = `${group.name} User ${i + 1}`
+          
+          // Create promise for each user creation
+          const userPromise = supabaseAdmin.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true,
+            user_metadata: {
+              full_name: fullName
             }
-            userIndex++
-            continue
-          }
-          console.error(`Error creating user ${email}:`, authError)
-          userIndex++
-          continue
+          }).then(async ({ data: authData, error: authError }) => {
+            if (authError) {
+              if (authError.message?.includes('already been registered')) {
+                console.log(`User ${email} already exists, skipping...`)
+                return null
+              }
+              console.error(`Error creating user ${email}:`, authError)
+              return null
+            }
+
+            const userId = authData.user.id
+            
+            // Insert profile
+            await supabaseAdmin
+              .from('profiles')
+              .upsert({
+                id: userId,
+                email: email,
+                full_name: fullName,
+                department: group.name,
+                role: group.name === 'Admin' ? 'admin' : 'employee'
+              }, { onConflict: 'id' })
+
+            return userId
+          })
+
+          batchPromises.push(userPromise)
         }
 
-        const userId = authData.user.id
-        userIds.push(userId)
-        allUserIds.push(userId)
-
-        // Insert profile explicitly (don't rely on trigger timing)
-        await supabaseAdmin
-          .from('profiles')
-          .upsert({
-            id: userId,
-            email: email,
-            full_name: fullName,
-            department: group.name,
-            role: group.name === 'Admin' ? 'admin' : 'employee'
-          }, { onConflict: 'id' })
-
-        userIndex++
+        // Wait for batch to complete
+        const batchResults = await Promise.all(batchPromises)
+        const validUserIds = batchResults.filter(id => id !== null) as string[]
+        userIds.push(...validUserIds)
+        allUserIds.push(...validUserIds)
         
-        if (userIndex % 10 === 0) {
-          console.log(`Created ${userIndex} users...`)
-        }
+        userIndex += BATCH_SIZE
+        console.log(`Processed batch, total users: ${allUserIds.length}`)
       }
 
-      // Add users to group
-      const groupMembers = userIds.map(userId => ({
-        group_id: group.id,
-        user_id: userId
-      }))
+      // Add users to group in one operation
+      if (userIds.length > 0) {
+        const groupMembers = userIds.map(userId => ({
+          group_id: group.id,
+          user_id: userId
+        }))
 
-      const { error: memberError } = await supabaseAdmin
-        .from('group_members')
-        .insert(groupMembers)
+        const { error: memberError } = await supabaseAdmin
+          .from('group_members')
+          .upsert(groupMembers, { onConflict: 'group_id,user_id', ignoreDuplicates: true })
 
-      if (memberError) throw memberError
-      console.log(`Added ${userIds.length} members to ${group.name}`)
+        if (memberError) {
+          console.error(`Error adding members to ${group.name}:`, memberError)
+        } else {
+          console.log(`Added ${userIds.length} members to ${group.name}`)
+        }
+      }
     }
 
     console.log(`Total users created: ${allUserIds.length}`)
