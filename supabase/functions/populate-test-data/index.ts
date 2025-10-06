@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     await supabaseAdmin
       .from('groups')
       .delete()
-      .in('name', ['Admin', 'Directors', 'Executive Directors', 'Supervisor Probation Officers', 'Probation Officers'])
+      .in('name', ['Directors', 'Executive Directors', 'Admin', 'SPO', 'PO'])
 
     // Delete test users from auth (should work now that all related data is gone)
     for (const userId of testUserIds) {
@@ -116,11 +116,11 @@ Deno.serve(async (req) => {
     // 2. Create Groups
     console.log('Creating groups...')
     const groups = [
-      { name: 'Admin', description: 'Administrative staff', userCount: 10 },
-      { name: 'Directors', description: 'Department directors', userCount: 10 },
-      { name: 'Executive Directors', description: 'Executive leadership', userCount: 5 },
-      { name: 'Supervisor Probation Officers', description: 'Supervisory staff', userCount: 50 },
-      { name: 'Probation Officers', description: 'Front-line probation officers', userCount: 221 }
+      { name: 'Directors', description: 'Director level staff members', userCount: 15 },
+      { name: 'Executive Directors', description: 'Executive director level staff members', userCount: 5 },
+      { name: 'Admin', description: 'Administrative staff members', userCount: 20 },
+      { name: 'SPO', description: 'Senior Probation Officer staff members', userCount: 50 },
+      { name: 'PO', description: 'Probation Officer staff members', userCount: 250 }
     ]
 
     const createdGroups = []
@@ -277,11 +277,11 @@ Deno.serve(async (req) => {
         loginInfo: {
           message: 'You can login with any user. All passwords are: Demo123!',
           exampleUsers: [
-            'user1@apex-demo.com (Admin)',
-            'user11@apex-demo.com (Director)',
-            'user21@apex-demo.com (Executive Director)',
-            'user26@apex-demo.com (Supervisor Probation Officer)',
-            'user76@apex-demo.com (Probation Officer)'
+            'user1@apex-demo.com (Directors)',
+            'user16@apex-demo.com (Executive Directors)',
+            'user21@apex-demo.com (Admin)',
+            'user41@apex-demo.com (SPO)',
+            'user91@apex-demo.com (PO)'
           ]
         }
       }),
