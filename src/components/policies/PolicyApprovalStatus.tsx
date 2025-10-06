@@ -61,14 +61,18 @@ const PolicyApprovalStatus = ({ policyId }: PolicyApprovalStatusProps) => {
       setAttestations(attestationsData || []);
 
       // Calculate unique assigned users
-      const uniqueUsers = new Set<string>();
+      const uniqueUsersMap = new Map<string, { dueDate: Date | null }>();
       const attestedUsers = new Set(attestationsData?.map(a => a.user_id) || []);
 
-      // Process assignments
+      // Process assignments to get unique users
       for (const assignment of assignmentsData || []) {
         if (assignment.user_id) {
           // Direct user assignment
-          uniqueUsers.add(assignment.user_id);
+          if (!uniqueUsersMap.has(assignment.user_id)) {
+            uniqueUsersMap.set(assignment.user_id, {
+              dueDate: assignment.due_date ? new Date(assignment.due_date) : null
+            });
+          }
         } else if (assignment.group_id) {
           // Group assignment - fetch group members
           const { data: groupMembers } = await supabase
@@ -77,41 +81,35 @@ const PolicyApprovalStatus = ({ policyId }: PolicyApprovalStatusProps) => {
             .eq("group_id", assignment.group_id);
           
           groupMembers?.forEach(member => {
-            uniqueUsers.add(member.user_id);
+            if (!uniqueUsersMap.has(member.user_id)) {
+              uniqueUsersMap.set(member.user_id, {
+                dueDate: assignment.due_date ? new Date(assignment.due_date) : null
+              });
+            }
           });
         }
       }
 
-      const totalAssigned = uniqueUsers.size;
-      const completed = Array.from(uniqueUsers).filter(userId => 
+      const totalAssigned = uniqueUsersMap.size;
+      
+      // Count completed (users who have attested)
+      const completed = Array.from(uniqueUsersMap.keys()).filter(userId => 
         attestedUsers.has(userId)
       ).length;
+      
+      // Pending is total minus completed
       const pending = totalAssigned - completed;
 
-      // Calculate overdue (assignments past due date without attestation)
-      let overdue = 0;
+      // Calculate overdue (pending users past their due date)
       const now = new Date();
+      let overdue = 0;
       
-      for (const assignment of assignmentsData || []) {
-        if (assignment.due_date && new Date(assignment.due_date) < now) {
-          if (assignment.user_id) {
-            if (!attestedUsers.has(assignment.user_id)) {
-              overdue++;
-            }
-          } else if (assignment.group_id) {
-            const { data: groupMembers } = await supabase
-              .from("group_members")
-              .select("user_id")
-              .eq("group_id", assignment.group_id);
-            
-            groupMembers?.forEach(member => {
-              if (!attestedUsers.has(member.user_id)) {
-                overdue++;
-              }
-            });
-          }
+      uniqueUsersMap.forEach((data, userId) => {
+        // User hasn't attested and has a due date that has passed
+        if (!attestedUsers.has(userId) && data.dueDate && data.dueDate < now) {
+          overdue++;
         }
-      }
+      });
 
       setStats({ totalAssigned, completed, pending, overdue });
     } catch (error) {
@@ -120,10 +118,6 @@ const PolicyApprovalStatus = ({ policyId }: PolicyApprovalStatusProps) => {
       setLoading(false);
     }
   };
-
-  if (loading) {
-    return <div className="animate-pulse">Loading approval status...</div>;
-  }
 
   const completionPercentage = stats.totalAssigned > 0 
     ? Math.round((stats.completed / stats.totalAssigned) * 100) 
