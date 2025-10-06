@@ -13,6 +13,7 @@ interface PolicyApprovalStatusProps {
 const PolicyApprovalStatus = ({ policyId }: PolicyApprovalStatusProps) => {
   const [assignments, setAssignments] = useState<any[]>([]);
   const [attestations, setAttestations] = useState<any[]>([]);
+  const [pendingUsers, setPendingUsers] = useState<any[]>([]);
   const [stats, setStats] = useState({
     totalAssigned: 0,
     completed: 0,
@@ -61,29 +62,40 @@ const PolicyApprovalStatus = ({ policyId }: PolicyApprovalStatusProps) => {
       setAttestations(attestationsData || []);
 
       // Calculate unique assigned users
-      const uniqueUsersMap = new Map<string, { dueDate: Date | null }>();
+      const uniqueUsersMap = new Map<string, { dueDate: Date | null, profile?: any }>();
       const attestedUsers = new Set(attestationsData?.map(a => a.user_id) || []);
 
       // Process assignments to get unique users
       for (const assignment of assignmentsData || []) {
         if (assignment.user_id) {
-          // Direct user assignment
+          // Direct user assignment - fetch user profile
+          const { data: userProfile } = await supabase
+            .from("profiles")
+            .select("id, full_name, email, department")
+            .eq("id", assignment.user_id)
+            .single();
+          
           if (!uniqueUsersMap.has(assignment.user_id)) {
             uniqueUsersMap.set(assignment.user_id, {
-              dueDate: assignment.due_date ? new Date(assignment.due_date) : null
+              dueDate: assignment.due_date ? new Date(assignment.due_date) : null,
+              profile: userProfile
             });
           }
         } else if (assignment.group_id) {
           // Group assignment - fetch group members
           const { data: groupMembers } = await supabase
             .from("group_members")
-            .select("user_id")
+            .select(`
+              user_id,
+              profiles(id, full_name, email, department)
+            `)
             .eq("group_id", assignment.group_id);
           
           groupMembers?.forEach(member => {
             if (!uniqueUsersMap.has(member.user_id)) {
               uniqueUsersMap.set(member.user_id, {
-                dueDate: assignment.due_date ? new Date(assignment.due_date) : null
+                dueDate: assignment.due_date ? new Date(assignment.due_date) : null,
+                profile: member.profiles
               });
             }
           });
@@ -100,17 +112,28 @@ const PolicyApprovalStatus = ({ policyId }: PolicyApprovalStatusProps) => {
       // Pending is total minus completed
       const pending = totalAssigned - completed;
 
-      // Calculate overdue (pending users past their due date)
+      // Calculate overdue and build pending users list
       const now = new Date();
       let overdue = 0;
+      const pendingUsersList: any[] = [];
       
       uniqueUsersMap.forEach((data, userId) => {
-        // User hasn't attested and has a due date that has passed
-        if (!attestedUsers.has(userId) && data.dueDate && data.dueDate < now) {
-          overdue++;
+        // User hasn't attested
+        if (!attestedUsers.has(userId)) {
+          const isPastDue = data.dueDate && data.dueDate < now;
+          if (isPastDue) {
+            overdue++;
+          }
+          pendingUsersList.push({
+            userId,
+            profile: data.profile,
+            dueDate: data.dueDate,
+            isOverdue: isPastDue
+          });
         }
       });
 
+      setPendingUsers(pendingUsersList);
       setStats({ totalAssigned, completed, pending, overdue });
     } catch (error) {
       console.error("Failed to fetch approval status:", error);
@@ -163,9 +186,65 @@ const PolicyApprovalStatus = ({ policyId }: PolicyApprovalStatusProps) => {
                   <p className="text-xs text-muted-foreground text-center">Pending</p>
                 </div>
               </CardContent>
-            </Card>
+      </Card>
 
-            <Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Pending Attestations</CardTitle>
+          <CardDescription>Users who have not yet signed this policy</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {pendingUsers.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              All assigned users have signed
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {pendingUsers.map((pendingUser) => (
+                <div 
+                  key={pendingUser.userId} 
+                  className={`flex items-center justify-between p-3 border rounded-lg ${
+                    pendingUser.isOverdue ? 'border-red-300 bg-red-50/50' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Clock className={`h-5 w-5 ${pendingUser.isOverdue ? 'text-red-500' : 'text-yellow-500'}`} />
+                    <div>
+                      <p className="font-medium">{pendingUser.profile?.full_name || 'Unknown User'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {pendingUser.profile?.email}
+                      </p>
+                      {pendingUser.profile?.department && (
+                        <p className="text-xs text-muted-foreground">
+                          {pendingUser.profile.department}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    {pendingUser.dueDate ? (
+                      <>
+                        <p className="text-sm text-muted-foreground">
+                          Due: {format(pendingUser.dueDate, "PP")}
+                        </p>
+                        {pendingUser.isOverdue && (
+                          <Badge variant="destructive" className="mt-1">
+                            Overdue
+                          </Badge>
+                        )}
+                      </>
+                    ) : (
+                      <Badge variant="secondary">No due date</Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center space-y-2">
                   <XCircle className="h-8 w-8 text-red-500" />
