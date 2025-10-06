@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
         userIds.push(...validUserIds)
         allUserIds.push(...validUserIds)
         
-        userIndex += BATCH_SIZE
+        userIndex += (batchEnd - batchStart) // Increment by actual batch size
         console.log(`Processed batch for ${group.name}, total users so far: ${allUserIds.length}`)
       }
 
