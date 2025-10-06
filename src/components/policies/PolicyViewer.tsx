@@ -176,7 +176,7 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
                   {/* PDF Viewer */}
                   <div className="border rounded-lg overflow-hidden bg-background">
                     {fileError ? (
-                      <div className="w-full h-[800px] flex items-center justify-center">
+                      <div className="w-full h-[500px] flex items-center justify-center">
                         <div className="text-center space-y-4 p-8">
                           <FileText className="h-16 w-16 mx-auto text-muted-foreground" />
                           <div>
@@ -201,7 +201,7 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
                             toast.error('Failed to load PDF document');
                           }}
                           loading={
-                            <div className="w-full h-[800px] flex items-center justify-center">
+                            <div className="w-full h-[500px] flex items-center justify-center">
                               <p className="text-muted-foreground">Loading document...</p>
                             </div>
                           }
@@ -211,7 +211,7 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
                             renderTextLayer={false}
                             renderAnnotationLayer={false}
                             className="shadow-lg"
-                            width={Math.min(window.innerWidth * 0.8, 900)}
+                            width={Math.min(window.innerWidth * 0.6, 700)}
                           />
                         </Document>
                         
@@ -242,7 +242,7 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
                         )}
                       </div>
                     ) : (
-                      <div className="w-full h-[800px] flex items-center justify-center">
+                      <div className="w-full h-[500px] flex items-center justify-center">
                         <p className="text-muted-foreground">Loading document...</p>
                       </div>
                     )}
