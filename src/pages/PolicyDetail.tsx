@@ -61,14 +61,34 @@ const PolicyDetail = () => {
       if (policyError) throw policyError;
       setPolicy(policyData);
 
-      // Check if policy is assigned to user
-      const { data: assignments } = await supabase
+      // Check if policy is assigned to user (either directly or through a group)
+      // First check direct user assignments
+      const { data: directAssignments } = await supabase
         .from("policy_assignments")
-        .select("*, group_members!inner(*)")
+        .select("*")
         .eq("policy_id", id)
-        .or(`user_id.eq.${user.id},group_members.user_id.eq.${user.id}`);
+        .eq("user_id", user.id);
 
-      setIsAssigned((assignments?.length || 0) > 0);
+      // Then check group assignments
+      const { data: userGroups } = await supabase
+        .from("group_members")
+        .select("group_id")
+        .eq("user_id", user.id);
+
+      const groupIds = userGroups?.map(g => g.group_id) || [];
+      
+      let groupAssignments = [];
+      if (groupIds.length > 0) {
+        const { data } = await supabase
+          .from("policy_assignments")
+          .select("*")
+          .eq("policy_id", id)
+          .in("group_id", groupIds);
+        groupAssignments = data || [];
+      }
+
+      const totalAssignments = (directAssignments?.length || 0) + groupAssignments.length;
+      setIsAssigned(totalAssignments > 0);
 
       // Check if user has attested
       if (policyData.current_version_id) {
