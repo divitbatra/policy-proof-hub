@@ -312,9 +312,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3. Delete remaining policies
-    console.log('Deleting all remaining policies...')
-    await supabaseAdmin.from('policies').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    // 3. Delete ALL policies (no conditions)
+    console.log('Deleting all policies...')
+    const { data: allPolicies } = await supabaseAdmin.from('policies').select('id')
+    if (allPolicies && allPolicies.length > 0) {
+      const policyIds = allPolicies.map(p => p.id)
+      await supabaseAdmin.from('policy_versions').delete().in('policy_id', policyIds)
+      await supabaseAdmin.from('assessments').delete().in('policy_id', policyIds)
+      await supabaseAdmin.from('policies').delete().in('id', policyIds)
+      console.log(`Deleted ${allPolicies.length} policies`)
+    }
 
     // 4. Get the current user ID for creating policies
     const { data: { users: remainingUsers } } = await supabaseAdmin.auth.admin.listUsers()
