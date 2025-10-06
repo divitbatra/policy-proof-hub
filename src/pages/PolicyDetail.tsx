@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import PolicyApprovalStatus from "@/components/policies/PolicyApprovalStatus";
 const PolicyDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [policy, setPolicy] = useState<any>(null);
   const [userRole, setUserRole] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
@@ -114,6 +115,10 @@ const PolicyDetail = () => {
   const canEdit = isAdminOrPublisher;
   const canAssign = isAdminOrPublisher;
   const needsAttestation = isAssigned && !hasAttested && policy.status === "published";
+  
+  // Determine default tab based on URL parameter
+  const actionParam = searchParams.get("action");
+  const defaultTab = actionParam === "sign" && needsAttestation ? "sign" : "view";
 
   return (
     <DashboardLayout>
@@ -125,7 +130,7 @@ const PolicyDetail = () => {
           </Button>
         </div>
 
-        <Tabs defaultValue="view" className="w-full">
+        <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="view">View</TabsTrigger>
             {needsAttestation && <TabsTrigger value="sign">Sign</TabsTrigger>}

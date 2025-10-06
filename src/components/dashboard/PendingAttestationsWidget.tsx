@@ -65,7 +65,7 @@ const PendingAttestationsWidget = () => {
   };
 
   const handleViewPolicy = (policyId: string) => {
-    navigate(`/dashboard/policies/${policyId}`);
+    navigate(`/dashboard/policies/${policyId}?action=sign`);
   };
 
   const handleViewAll = () => {

@@ -69,7 +69,7 @@ const PendingAttestations = () => {
   };
 
   const handleViewPolicy = (policyId: string) => {
-    navigate(`/dashboard/policies/${policyId}`);
+    navigate(`/dashboard/policies/${policyId}?action=sign`);
   };
 
   if (loading) {
