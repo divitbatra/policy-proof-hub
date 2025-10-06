@@ -11,6 +11,7 @@ import PolicyDetail from "./pages/PolicyDetail";
 import Groups from "./pages/Groups";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import UploadPolicyDocs from "./pages/UploadPolicyDocs";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/dashboard/policies/:id" element={<PolicyDetail />} />
           <Route path="/dashboard/groups" element={<Groups />} />
           <Route path="/dashboard/settings" element={<Settings />} />
+          <Route path="/upload-docs" element={<UploadPolicyDocs />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
