@@ -67,25 +67,38 @@ Deno.serve(async (req) => {
 
     console.log(`Found ${testUserIds.length} existing test users to delete`)
 
-    // Delete policies created by test users
     if (testUserIds.length > 0) {
-      const { error: deletePoliciesError } = await supabaseAdmin
-        .from('policies')
-        .delete()
-        .in('created_by', testUserIds)
+      // Delete in correct order to avoid foreign key constraints
       
-      if (deletePoliciesError) console.log('Note: Error deleting policies:', deletePoliciesError.message)
+      // 1. Delete attestations
+      await supabaseAdmin.from('attestations').delete().in('user_id', testUserIds)
+      
+      // 2. Delete assessment results
+      await supabaseAdmin.from('assessment_results').delete().in('user_id', testUserIds)
+      
+      // 3. Delete policy assignments
+      await supabaseAdmin.from('policy_assignments').delete().in('user_id', testUserIds)
+      await supabaseAdmin.from('policy_assignments').delete().in('assigned_by', testUserIds)
+      
+      // 4. Delete group members
+      await supabaseAdmin.from('group_members').delete().in('user_id', testUserIds)
+      
+      // 5. Delete policies created by test users
+      await supabaseAdmin.from('policies').delete().in('created_by', testUserIds)
+      
+      // 6. Delete profiles
+      await supabaseAdmin.from('profiles').delete().in('id', testUserIds)
+      
+      console.log('Deleted all related data for test users')
     }
     
     // Delete existing test groups
-    const { error: deleteGroupsError } = await supabaseAdmin
+    await supabaseAdmin
       .from('groups')
       .delete()
       .in('name', ['Admin', 'Directors', 'Executive Directors', 'Supervisor Probation Officers', 'Probation Officers'])
-    
-    if (deleteGroupsError) console.log('Note: Error deleting groups:', deleteGroupsError.message)
 
-    // Delete test users from auth
+    // Delete test users from auth (should work now that all related data is gone)
     for (const userId of testUserIds) {
       const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
       if (error) {
@@ -95,7 +108,7 @@ Deno.serve(async (req) => {
     
     console.log('Cleanup complete')
 
-    // Wait a bit for deletions to propagate
+    // Wait for deletions to propagate
     await new Promise(resolve => setTimeout(resolve, 2000))
 
     // 2. Create Groups
