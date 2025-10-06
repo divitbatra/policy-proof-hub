@@ -192,31 +192,8 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
                       </div>
                     ) : blobUrl ? (
                       <div className="flex flex-col items-center">
-                        <Document
-                          file={blobUrl}
-                          onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-                          onLoadError={(error) => {
-                            console.error('Error loading PDF:', error);
-                            setFileError(true);
-                            toast.error('Failed to load PDF document');
-                          }}
-                          loading={
-                            <div className="w-full h-[500px] flex items-center justify-center">
-                              <p className="text-muted-foreground">Loading document...</p>
-                            </div>
-                          }
-                        >
-                          <Page
-                            pageNumber={pageNumber}
-                            renderTextLayer={false}
-                            renderAnnotationLayer={false}
-                            className="shadow-lg"
-                            width={Math.min(window.innerWidth * 0.6, 700)}
-                          />
-                        </Document>
-                        
                         {numPages > 1 && (
-                          <div className="flex items-center gap-4 mt-4 pb-4">
+                          <div className="flex items-center gap-4 py-4 border-b w-full justify-center">
                             <Button
                               variant="outline"
                               size="sm"
@@ -240,6 +217,29 @@ const PolicyViewer = ({ policy }: PolicyViewerProps) => {
                             </Button>
                           </div>
                         )}
+                        
+                        <Document
+                          file={blobUrl}
+                          onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+                          onLoadError={(error) => {
+                            console.error('Error loading PDF:', error);
+                            setFileError(true);
+                            toast.error('Failed to load PDF document');
+                          }}
+                          loading={
+                            <div className="w-full h-[500px] flex items-center justify-center">
+                              <p className="text-muted-foreground">Loading document...</p>
+                            </div>
+                          }
+                        >
+                          <Page
+                            pageNumber={pageNumber}
+                            renderTextLayer={false}
+                            renderAnnotationLayer={false}
+                            className="shadow-lg"
+                            width={Math.min(window.innerWidth * 0.6, 700)}
+                          />
+                        </Document>
                       </div>
                     ) : (
                       <div className="w-full h-[500px] flex items-center justify-center">
