@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Shield, FileText, Users, BarChart, Settings, LogOut, FileCheck } from "lucide-react";
+import { Shield, FileText, Users, BarChart, Settings, LogOut, FileCheck, Hexagon } from "lucide-react";
 import { toast } from "sonner";
 
 interface DashboardLayoutProps {
@@ -31,10 +31,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link to="/dashboard" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-primary-light flex items-center justify-center">
-              <Shield className="h-6 w-6 text-primary-foreground" />
+            <div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-primary via-primary to-primary-light flex items-center justify-center shadow-lg">
+              <Hexagon className="h-7 w-7 text-primary-foreground fill-primary-foreground/20" strokeWidth={2} />
+              <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-primary-foreground">A</span>
             </div>
-            <span className="text-xl font-bold">APEX</span>
+            <span className="text-xl font-bold tracking-tight">APEX</span>
           </Link>
           
           <Button variant="outline" onClick={handleSignOut}>

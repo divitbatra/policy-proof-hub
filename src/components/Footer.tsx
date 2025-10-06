@@ -1,4 +1,4 @@
-import { Shield } from "lucide-react";
+import { Shield, Hexagon } from "lucide-react";
 
 const Footer = () => {
   return (
@@ -6,9 +6,12 @@ const Footer = () => {
       <div className="container mx-auto px-4">
         <div className="grid md:grid-cols-4 gap-8 mb-8">
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Shield className="h-8 w-8 text-primary" />
-              <span className="text-2xl font-bold text-foreground">APEX</span>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Hexagon className="h-10 w-10 text-primary fill-primary/20" strokeWidth={2} />
+                <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-primary">A</span>
+              </div>
+              <span className="text-2xl font-bold text-foreground tracking-tight">APEX</span>
             </div>
             <p className="text-muted-foreground">
               The single source of truth for policy compliance in public safety and healthcare.
