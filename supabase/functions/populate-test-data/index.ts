@@ -160,13 +160,30 @@ Deno.serve(async (req) => {
         })
 
         if (authError) {
-          // If user already exists, skip instead of failing
+          // If user already exists, fetch their ID instead of failing
           if (authError.message?.includes('already been registered')) {
-            console.log(`User ${email} already exists, skipping...`)
+            console.log(`User ${email} already exists, fetching ID...`)
+            const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers()
+            const foundUser = existingUser.users.find(u => u.email === email)
+            if (foundUser) {
+              userIds.push(foundUser.id)
+              allUserIds.push(foundUser.id)
+              
+              // Update profile for existing user
+              await supabaseAdmin
+                .from('profiles')
+                .update({
+                  full_name: fullName,
+                  department: group.name,
+                  role: group.name === 'Admin' ? 'admin' : 'employee'
+                })
+                .eq('id', foundUser.id)
+            }
             userIndex++
             continue
           }
           console.error(`Error creating user ${email}:`, authError)
+          userIndex++
           continue
         }
 
