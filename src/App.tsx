@@ -15,6 +15,7 @@ import UploadPolicyDocs from "./pages/UploadPolicyDocs";
 import PendingAttestations from "./pages/PendingAttestations";
 import PopulateTestData from "./pages/PopulateTestData";
 import CleanupUsers from "./pages/CleanupUsers";
+import AddUsersToGroup from "./pages/AddUsersToGroup";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +37,7 @@ const App = () => (
           <Route path="/upload-docs" element={<UploadPolicyDocs />} />
           <Route path="/populate-test-data" element={<PopulateTestData />} />
           <Route path="/cleanup-users" element={<CleanupUsers />} />
+          <Route path="/add-users-to-group" element={<AddUsersToGroup />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
