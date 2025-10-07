@@ -49,35 +49,22 @@ const PolicyList = () => {
 
       if (error) throw error;
       
-      // Group policies with the same base name (removing version numbers)
-      const groupedPolicies = new Map();
-      
-      data?.forEach((policy) => {
-        // Remove version numbers like "v16", "v2", etc. from the title
-        const baseTitle = policy.title.replace(/\s+v\d+$/i, '').trim();
-        
-        if (!groupedPolicies.has(baseTitle)) {
-          groupedPolicies.set(baseTitle, {
+      // For each policy, fetch the version count from policy_versions table
+      const policiesWithVersions = await Promise.all(
+        (data || []).map(async (policy) => {
+          const { count } = await supabase
+            .from("policy_versions")
+            .select("*", { count: "exact", head: true })
+            .eq("policy_id", policy.id);
+          
+          return {
             ...policy,
-            title: baseTitle,
-            allVersions: [policy]
-          });
-        } else {
-          // Add this version to the existing policy
-          const existing = groupedPolicies.get(baseTitle);
-          existing.allVersions.push(policy);
-          // Use the most recently created policy's data
-          if (new Date(policy.created_at) > new Date(existing.created_at)) {
-            groupedPolicies.set(baseTitle, {
-              ...policy,
-              title: baseTitle,
-              allVersions: existing.allVersions
-            });
-          }
-        }
-      });
+            versionCount: count || 0
+          };
+        })
+      );
 
-      setPolicies(Array.from(groupedPolicies.values()));
+      setPolicies(policiesWithVersions);
     } catch (error: any) {
       toast.error("Failed to load policies");
     } finally {
@@ -126,9 +113,9 @@ const PolicyList = () => {
                 <Badge variant={getStatusColor(policy.status)}>
                   {policy.status}
                 </Badge>
-                {policy.allVersions && policy.allVersions.length > 1 && (
+                {policy.versionCount > 0 && (
                   <Badge variant="outline">
-                    {policy.allVersions.length} version{policy.allVersions.length > 1 ? 's' : ''}
+                    {policy.versionCount} version{policy.versionCount !== 1 ? 's' : ''}
                   </Badge>
                 )}
               </div>
@@ -140,11 +127,6 @@ const PolicyList = () => {
                 <p>Created by: {policy.created_by_profile?.full_name}</p>
                 <p>Created: {format(new Date(policy.created_at), "PPP")}</p>
                 {policy.category && <p>Category: {policy.category}</p>}
-                {policy.allVersions && policy.allVersions.length > 1 && (
-                  <p>
-                    Total Versions: {policy.allVersions.length}
-                  </p>
-                )}
               </div>
               <div className="flex gap-2">
                 <Button 
