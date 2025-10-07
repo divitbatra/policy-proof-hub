@@ -37,14 +37,7 @@ const PolicyList = () => {
         .from("policies")
         .select(`
           *,
-          created_by_profile:profiles!policies_created_by_fkey(full_name),
-          policy_versions(
-            id,
-            version_number,
-            created_at,
-            file_name,
-            published_at
-          )
+          created_by_profile:profiles!policies_created_by_fkey(full_name)
         `)
         .order("created_at", { ascending: false });
 
@@ -67,19 +60,18 @@ const PolicyList = () => {
           groupedPolicies.set(baseTitle, {
             ...policy,
             title: baseTitle,
-            versions: policy.policy_versions || []
+            allVersions: [policy]
           });
         } else {
-          // Merge versions if there are multiple policies with same base name
+          // Add this version to the existing policy
           const existing = groupedPolicies.get(baseTitle);
-          const newVersions = Array.isArray(policy.policy_versions) ? policy.policy_versions : [];
-          existing.versions = [...existing.versions, ...newVersions];
+          existing.allVersions.push(policy);
           // Use the most recently created policy's data
           if (new Date(policy.created_at) > new Date(existing.created_at)) {
             groupedPolicies.set(baseTitle, {
               ...policy,
               title: baseTitle,
-              versions: existing.versions
+              allVersions: existing.allVersions
             });
           }
         }
@@ -134,9 +126,9 @@ const PolicyList = () => {
                 <Badge variant={getStatusColor(policy.status)}>
                   {policy.status}
                 </Badge>
-                {policy.versions && policy.versions.length > 0 && (
+                {policy.allVersions && policy.allVersions.length > 1 && (
                   <Badge variant="outline">
-                    {policy.versions.length} version{policy.versions.length > 1 ? 's' : ''}
+                    {policy.allVersions.length} version{policy.allVersions.length > 1 ? 's' : ''}
                   </Badge>
                 )}
               </div>
@@ -148,9 +140,9 @@ const PolicyList = () => {
                 <p>Created by: {policy.created_by_profile?.full_name}</p>
                 <p>Created: {format(new Date(policy.created_at), "PPP")}</p>
                 {policy.category && <p>Category: {policy.category}</p>}
-                {policy.current_version_id && policy.versions && policy.versions.length > 0 && (
+                {policy.allVersions && policy.allVersions.length > 1 && (
                   <p>
-                    Current Version: {policy.versions.find((v: any) => v.id === policy.current_version_id)?.version_number || 1}
+                    Total Versions: {policy.allVersions.length}
                   </p>
                 )}
               </div>
