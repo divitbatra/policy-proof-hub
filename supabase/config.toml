@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.cleanup-and-populate]
 verify_jwt = false
+
+[functions.upload-sample-policies]
+verify_jwt = false

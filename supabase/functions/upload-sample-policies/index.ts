@@ -23,17 +23,9 @@ Deno.serve(async (req) => {
 
     console.log('Starting to upload sample policy documents...');
 
-    // Sample PDF files to upload (mapping policy keywords to files)
-    const samplePolicies = [
-      { keyword: 'code of conduct', file: 'code_of_conduct.pdf' },
-      { keyword: 'data', file: 'data_security.pdf' },
-      { keyword: 'expense', file: 'expense_reimbursement.pdf' },
-      { keyword: 'remote', file: 'remote_work.pdf' },
-    ];
-
     let uploadedCount = 0;
 
-    // Get all policies
+    // Get all policies with their versions
     const { data: policies, error: policiesError } = await supabase
       .from('policies')
       .select('id, title, current_version_id');
@@ -41,35 +33,51 @@ Deno.serve(async (req) => {
     if (policiesError) throw policiesError;
 
     for (const policy of policies) {
-      // Find matching sample file
-      const matchingFile = samplePolicies.find(s => 
-        policy.title.toLowerCase().includes(s.keyword)
-      );
-      
-      if (!matchingFile) {
-        console.log(`No matching sample file for: ${policy.title}`);
-        continue;
-      }
+      console.log(`Processing policy: ${policy.title}`);
 
-      // Fetch the PDF from the public folder
-      const pdfUrl = `${supabaseUrl.replace('//', '//').split('/')[0]}//${supabaseUrl.replace('//', '//').split('/')[2]}/temp/${matchingFile.file}`;
-      console.log(`Fetching PDF from: ${pdfUrl}`);
+      // Generate a simple PDF placeholder (since we can't access public folder from edge function)
+      // Create a minimal PDF structure
+      const pdfContent = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources 4 0 R /MediaBox [0 0 612 792] /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >>
+endobj
+5 0 obj
+<< /Length 80 >>
+stream
+BT
+/F1 24 Tf
+100 700 Td
+(${policy.title}) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000214 00000 n
+0000000304 00000 n
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+435
+%%EOF`;
       
-      let pdfBlob;
-      try {
-        const response = await fetch(pdfUrl);
-        if (!response.ok) {
-          console.error(`Failed to fetch ${matchingFile.file}: ${response.status}`);
-          continue;
-        }
-        pdfBlob = await response.blob();
-      } catch (fetchError) {
-        console.error(`Error fetching ${matchingFile.file}:`, fetchError);
-        continue;
-      }
+      const pdfBlob = new Blob([pdfContent], { type: 'application/pdf' });
 
       // Upload to storage
-      const fileName = `${policy.id}/${matchingFile.file}`;
+      const fileName = `${policy.id}/sample_document_v1.pdf`;
       const { error: uploadError } = await supabase.storage
         .from('policy-documents')
         .upload(fileName, pdfBlob, {
@@ -98,7 +106,7 @@ Deno.serve(async (req) => {
             policy_id: policy.id,
             version_number: 1,
             file_url: urlData.publicUrl,
-            file_name: matchingFile.file,
+            file_name: 'sample_document_v1.pdf',
             file_size: pdfBlob.size,
             change_summary: 'Initial version uploaded with sample document'
           })
@@ -123,14 +131,14 @@ Deno.serve(async (req) => {
           .from('policy_versions')
           .update({
             file_url: urlData.publicUrl,
-            file_name: matchingFile.file,
+            file_name: 'sample_document_v1.pdf',
             file_size: pdfBlob.size
           })
           .eq('id', versionId);
       }
 
       uploadedCount++;
-      console.log(`Uploaded ${matchingFile.file} for ${policy.title}`);
+      console.log(`Uploaded sample document for ${policy.title}`);
     }
 
     return new Response(
