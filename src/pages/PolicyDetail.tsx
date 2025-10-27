@@ -12,6 +12,7 @@ import PolicyAssignment from "@/components/policies/PolicyAssignment";
 import PolicyVersionComparison from "@/components/policies/PolicyVersionComparison";
 import PolicyEdit from "@/components/policies/PolicyEdit";
 import PolicyApprovalStatus from "@/components/policies/PolicyApprovalStatus";
+import PolicySettings from "@/components/policies/PolicySettings";
 
 const PolicyDetail = () => {
   const { id } = useParams();
@@ -151,13 +152,14 @@ const PolicyDetail = () => {
         </div>
 
         <Tabs defaultValue={defaultTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="view">View</TabsTrigger>
             {needsAttestation && <TabsTrigger value="sign">Sign</TabsTrigger>}
             {canAssign && <TabsTrigger value="assign">Assign</TabsTrigger>}
             {canEdit && <TabsTrigger value="edit">Edit</TabsTrigger>}
             <TabsTrigger value="approval">Approval Status</TabsTrigger>
             <TabsTrigger value="compare">Compare Versions</TabsTrigger>
+            {canEdit && <TabsTrigger value="settings">Settings</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="view" className="space-y-4">
@@ -199,6 +201,16 @@ const PolicyDetail = () => {
               versions={policy.policy_versions || []}
             />
           </TabsContent>
+
+          {canEdit && (
+            <TabsContent value="settings" className="space-y-4">
+              <PolicySettings 
+                policy={policy}
+                canEdit={canEdit}
+                onUpdate={fetchPolicyDetails}
+              />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </DashboardLayout>
