@@ -152,7 +152,7 @@ const PolicyDetail = () => {
         </div>
 
         <Tabs defaultValue={defaultTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-7">
+          <TabsList className="inline-flex w-full">
             <TabsTrigger value="view">View</TabsTrigger>
             {needsAttestation && <TabsTrigger value="sign">Sign</TabsTrigger>}
             {canAssign && <TabsTrigger value="assign">Assign</TabsTrigger>}
