@@ -1,5 +1,6 @@
 // src/pages/UploadPolicyDocs.tsx
 import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,22 +10,21 @@ import { Upload, FileText, CheckCircle, AlertCircle } from "lucide-react";
 import * as mammoth from "mammoth";
 import html2pdf from "html2pdf.js";
 import DOMPurify from "dompurify";
-// optional: pull out the function
-const { sanitize } = DOMPurify;
 import { supabase } from "@/integrations/supabase/client";
 
+const sanitize = DOMPurify.sanitize;
+
 // ------------------------------
-// Small helpers (inlined)
+// Helpers
 // ------------------------------
 function toTitleCase(s: string) {
   return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function escapeHtml(s: string) {
-  return s.replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;" }[m]!));
+  return s.replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]!));
 }
 
-/** Pull SECTION / NUMBER / SUBJECT from raw text, if present. */
 function extractPolicyMeta(rawText: string) {
   const grab = (label: string) => {
     const re = new RegExp(`^\\s*${label}\\s*\\n?\\s*(.+)$`, "im");
@@ -37,47 +37,36 @@ function extractPolicyMeta(rawText: string) {
   return { section, number, subject };
 }
 
-/** Clean up Word-y HTML: headings, spacing, remove repeated footers, sanitize. */
 function normalizePolicyHtml(html: string) {
   let clean = html;
-
-  // Remove typical classification footers/headers
   clean = clean.replace(/Classification:\s*Protected\s+[AB]\s*/gi, "");
-
-  // Collapse multiple empty paragraphs
   clean = clean.replace(/(<p>\s*<\/p>){2,}/g, "<p>&nbsp;</p>");
-
-  // Convert ALL-CAPS lines that look like section headings
   clean = clean.replace(
     /<p>(POLICY STATEMENT|DEFINITIONS|STANDARDS|PROCEDURES|SCOPE|PURPOSE|BACKGROUND|RESPONSIBILITIES):?\s*<\/p>/gi,
     (_, cap: string) => `<h2>${toTitleCase(cap)}</h2>`
   );
-
-  // Tighten list spacing
   clean = clean.replace(/<ul>([\s\S]*?)<\/ul>/g, (m) => m.replace(/<p>\s*<\/p>/g, ""));
-
-  // Sanitize to be safe
   clean = sanitize(clean, { USE_PROFILES: { html: true } });
   return clean;
 }
 
-/** Wraps body HTML with a consistent policy header + print styles + footer page numbers. */
-function wrapWithPolicyTemplate(opts: {
-  section?: string;
-  number?: string;
-  subject?: string;
-  bodyHtml: string;
-}) {
+function wrapWithPolicyTemplate(opts: { section?: string; number?: string; subject?: string; bodyHtml: string }) {
   const { section, number, subject, bodyHtml } = opts;
 
   const css = `
     <style>
-      @page { margin: 22mm; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+      @page { margin: 15mm; }
       html, body { height: 100%; }
       body {
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
         color: #111827;
       }
+
+      /* A4 210mm: content width = 210 - 2*15 = 180mm */
+      .doc { width: 180mm; margin: 0 auto; }
+
       .header {
         display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: end;
         border-bottom: 2px solid #0f766e; padding-bottom: 8px; margin-bottom: 18px;
@@ -86,6 +75,7 @@ function wrapWithPolicyTemplate(opts: {
       .label { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
       .value { font-weight: 600; font-size: 14px; color: #0f172a; }
       .title { font-weight: 700; font-size: 18px; color: #0f172a; }
+
       h1, h2, h3 { color: #0f172a; }
       h1 { font-size: 22px; margin: 18px 0 10px; }
       h2 { font-size: 18px; margin: 16px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
@@ -94,8 +84,21 @@ function wrapWithPolicyTemplate(opts: {
       ul, ol { margin: 8px 0 8px 22px; }
       table { width: 100%; border-collapse: collapse; margin: 12px 0; }
       th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
+      img { max-width: 100%; height: auto; }
+
       footer { position: fixed; bottom: 10mm; left: 0; right: 0; text-align: right; font-size: 11px; color: #6b7280; }
       .page-number:before { content: counter(page); }
+
+      /* Pagination controls */
+      h2, h3, p, ul, ol, li, table, thead, tbody, tr, td, th {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .page-break, .html2pdf__page-break {
+        break-before: page;
+        page-break-before: always;
+        height: 0; border: 0; margin: 0; padding: 0;
+      }
     </style>
   `;
 
@@ -106,9 +109,7 @@ function wrapWithPolicyTemplate(opts: {
         <div class="label">Number</div><div class="value">${escapeHtml(number || "—")}</div>
         <div class="label">Subject</div><div class="value title">${escapeHtml(subject || "—")}</div>
       </div>
-      <div style="text-align:right; font-size:12px; color:#6b7280;">
-        Policy Proof Hub
-      </div>
+      <div style="text-align:right; font-size:12px; color:#6b7280;">Policy Proof Hub</div>
     </div>
   `;
 
@@ -118,8 +119,10 @@ function wrapWithPolicyTemplate(opts: {
   <html>
     <head><meta charset="utf-8" />${css}</head>
     <body>
-      ${headerHtml}
-      ${bodyHtml}
+      <div class="doc">
+        ${headerHtml}
+        ${bodyHtml}
+      </div>
       ${footerHtml}
     </body>
   </html>`;
@@ -136,6 +139,8 @@ function makePdfName(originalName: string, number?: string, subject?: string) {
 // Component
 // ------------------------------
 const UploadPolicyDocs = () => {
+  const navigate = useNavigate();
+
   const [isUploading, setIsUploading] = useState(false);
   const [uploadComplete, setUploadComplete] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -143,8 +148,7 @@ const UploadPolicyDocs = () => {
   const [section, setSection] = useState("");
   const [number, setNumber] = useState("");
   const [subject, setSubject] = useState("");
-
-  // Optional: attach the upload to a policy/policy_versions row
+  // Optional: attach to existing policy; if empty we auto-create one
   const [policyId, setPolicyId] = useState<string>("");
   const [versionNumber, setVersionNumber] = useState<number>(1);
 
@@ -161,18 +165,14 @@ const UploadPolicyDocs = () => {
     setUploadComplete(false);
 
     try {
+      console.log("[UploadPolicyDocs] Reading .docx…");
       const arrayBuffer = await f.arrayBuffer();
 
-      // Convert DOCX -> HTML (structure-focused)
       const { value: html, messages } = await mammoth.convertToHtml(
         { arrayBuffer },
-        {
-          styleMap: ["p[style-name='List Paragraph'] => ul > li:fresh"],
-          includeDefaultStyleMap: true,
-        }
+        { styleMap: ["p[style-name='List Paragraph'] => ul > li:fresh"], includeDefaultStyleMap: true }
       );
 
-      // Extract raw text for metadata detection
       const { value: rawText } = await mammoth.extractRawText({ arrayBuffer });
       const meta = extractPolicyMeta(rawText);
       setSection(meta.section);
@@ -182,106 +182,176 @@ const UploadPolicyDocs = () => {
       const normalized = normalizePolicyHtml(html);
       setDocHtml(normalized);
 
-      if (messages?.length) {
-        console.info("Mammoth messages:", messages);
-      }
-
-      toast.success("Document parsed. Review the preview, tweak header fields, then Convert & Upload.");
+      if (messages?.length) console.info("[UploadPolicyDocs] Mammoth messages:", messages);
+      toast.success("Document parsed. Review header fields, then Convert & Upload.");
     } catch (err) {
-      console.error(err);
+      console.error("[UploadPolicyDocs] DOCX parse error:", err);
       toast.error("Failed to read the .docx file");
     }
   };
 
   const buildPdfHtml = () =>
-    wrapWithPolicyTemplate({
-      section,
-      number,
-      subject,
-      bodyHtml: docHtml || "<p>(No content parsed)</p>",
-    });
+    wrapWithPolicyTemplate({ section, number, subject, bodyHtml: docHtml || "<p>(No content parsed)</p>" });
 
-  /** Generate a PDF Blob by rendering the formatted HTML into a hidden iframe for html2pdf. */
   const generatePdfBlob = async (): Promise<Blob> => {
+    console.log("[UploadPolicyDocs] Generating PDF…");
     const html = buildPdfHtml();
 
-    // Render HTML into a hidden iframe so html2pdf can capture it accurately
     const iframe = document.createElement("iframe");
     iframe.style.position = "fixed";
     iframe.style.left = "-99999px";
     iframe.style.top = "-99999px";
     document.body.appendChild(iframe);
-    iframe.contentDocument?.open();
-    iframe.contentDocument?.write(html);
-    iframe.contentDocument?.close();
+    try {
+      iframe.contentDocument?.open();
+      iframe.contentDocument?.write(html);
+      iframe.contentDocument?.close();
+    } catch (err) {
+      console.error("[UploadPolicyDocs] Iframe write error:", err);
+      document.body.removeChild(iframe);
+      throw err;
+    }
 
     const target = iframe.contentDocument?.body as HTMLElement;
 
-    // Use literals to reduce TS friction; cast shape at call site
+    const margin: [number, number, number, number] = [10, 10, 12, 10];
     const opt = {
-      margin: [10, 10, 15, 10], // top, left, bottom, right
+      margin,
       filename: makePdfName(file?.name ?? "policy.docx", number, subject),
       image: { type: "jpeg" as const, quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const },
+      pagebreak: { mode: ["css", "legacy"], avoid: ["h2", "h3", "p", "ul", "ol", "li", "table"] },
     };
 
-    const worker = html2pdf().from(target).set(opt as any);
-    const pdfBlob: Blob = await worker.outputPdf("blob");
+    let pdfBlob: Blob | null = null;
 
-    // cleanup
+    try {
+      // Some builds expose outputPdf
+     
+      const w1 = html2pdf().from(target).set(opt as any);
+  
+      if (typeof w1.outputPdf === "function") {
+ 
+        pdfBlob = await w1.outputPdf("blob");
+        console.log("[UploadPolicyDocs] PDF generated via outputPdf");
+      }
+    } catch (e) {
+      console.warn("[UploadPolicyDocs] outputPdf failed/absent:", e);
+    }
+
+    if (!pdfBlob) {
+      try {
+        // Canonical path
+        const pdf = await (html2pdf() as any).from(target).set(opt as any).toPdf().get("pdf");
+        pdfBlob = pdf.output("blob");
+        console.log("[UploadPolicyDocs] PDF generated via toPdf().get('pdf').output('blob')");
+      } catch (e) {
+        console.error("[UploadPolicyDocs] Fallback PDF generation failed:", e);
+      }
+    }
+
     document.body.removeChild(iframe);
+
+    if (!pdfBlob || !pdfBlob.size) throw new Error("PDF generation produced an empty blob");
+    console.log("[UploadPolicyDocs] PDF size(bytes):", pdfBlob.size);
     return pdfBlob;
   };
 
   const handleConvertAndUpload = async () => {
-    if (!file) {
-      toast.error("Please select a .docx file first");
-      return;
-    }
-    if (!docHtml) {
-      toast.error("Nothing to convert (failed to parse?)");
-      return;
-    }
+    if (!file) toast.error("Please select a .docx file first");
+    if (!docHtml) toast.error("Nothing to convert (failed to parse?)");
+    if (!file || !docHtml) return;
 
     setIsUploading(true);
     setUploadComplete(false);
 
     try {
+      console.log("[UploadPolicyDocs] Begin convert & upload flow");
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !user) throw new Error("You must be signed in to upload.");
+
+      // 0) Create a policy if none provided (per your schema: no 'number' column)
+      let ensuredPolicyId = policyId?.trim();
+      if (!ensuredPolicyId) {
+        const title = (subject?.trim() || file.name.replace(/\.docx$/i, "").trim()).slice(0, 200);
+        const description = section?.trim() || null;
+        const category = "General";
+
+        const { data: created, error: cErr } = await supabase
+          .from("policies")
+          .insert({
+            title,
+            description,
+            category,
+            status: "draft", // must exist in your policy_status enum
+            created_by: user.id,
+          })
+          .select("id")
+          .single();
+
+        if (cErr) throw new Error(`Failed to create policy: ${cErr.message}`);
+        ensuredPolicyId = created!.id;
+        console.log("[UploadPolicyDocs] Created policy", ensuredPolicyId);
+      } else {
+        console.log("[UploadPolicyDocs] Using existing policy", ensuredPolicyId);
+      }
+
       // 1) Generate PDF
       const pdfBlob = await generatePdfBlob();
       const pdfName = makePdfName(file.name, number, subject);
 
-      // 2) Upload to Supabase Storage
+      // 2) Upload PDF to Storage
       const path = `formatted/${Date.now()}_${pdfName}`;
+      console.log("[UploadPolicyDocs] Uploading to Storage path:", path);
       const { error: upErr } = await supabase.storage
         .from("policy-documents")
         .upload(path, pdfBlob, { contentType: "application/pdf", upsert: false });
+      if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
 
-      if (upErr) throw upErr;
-
-      // 3) Get public URL
+      // 3) Public URL (use signed URLs instead if your bucket is private)
       const { data: pub } = supabase.storage.from("policy-documents").getPublicUrl(path);
-      const publicUrl = pub?.publicUrl;
+      const publicUrl = pub?.publicUrl ?? null;
+      console.log("[UploadPolicyDocs] Public URL:", publicUrl);
+      if (!publicUrl) throw new Error("Could not obtain a public URL for the uploaded PDF. Is the bucket public?");
 
-      // 4) (Optional) Insert a policy_versions row
-      if (policyId && publicUrl) {
-        const { error: dbErr } = await supabase.from("policy_versions").insert({
-          policy_id: policyId,
+      // 4) Insert policy_versions
+      const { data: inserted, error: insErr } = await supabase
+        .from("policy_versions")
+        .insert({
+          policy_id: ensuredPolicyId,
           version_number: versionNumber,
           file_name: pdfName,
           file_size: pdfBlob.size,
           file_url: publicUrl,
           published_at: new Date().toISOString(),
-        });
-        if (dbErr) throw dbErr;
+        })
+        .select("id")
+        .single();
+      if (insErr) throw new Error(`Failed to create policy version: ${insErr.message}`);
+      const versionId = inserted!.id;
+
+      // 5) Update policies.current_version_id (+ publish if allowed)
+      const { error: updErr } = await supabase
+        .from("policies")
+        .update({ current_version_id: versionId, status: "published" })
+        .eq("id", ensuredPolicyId);
+      if (updErr) {
+        // Fallback if 'published' isn't a valid enum value in your DB
+        const { error: fallback } = await supabase
+          .from("policies")
+          .update({ current_version_id: versionId })
+          .eq("id", ensuredPolicyId);
+        if (fallback) throw new Error(`Failed to set current version on policy: ${fallback.message}`);
       }
 
       setUploadComplete(true);
-      toast.success("Converted to PDF and uploaded successfully!");
+      toast.success("Policy created, converted to PDF, and linked!");
+      console.log("[UploadPolicyDocs] All done → redirect to detail");
+      navigate(`/dashboard/policies/${ensuredPolicyId}`);
     } catch (error: any) {
-      console.error("Upload error:", error);
-      toast.error(error?.message ?? "Failed to convert/upload");
+      console.error("[UploadPolicyDocs] Convert/Upload error:", error);
+      toast.error(error?.message ?? "Failed to convert and upload");
     } finally {
       setIsUploading(false);
     }
@@ -297,12 +367,16 @@ const UploadPolicyDocs = () => {
           </CardTitle>
           <CardDescription>
             Select a Word document. We’ll clean the layout, standardize the header (Section/Number/Subject),
-            render a preview, convert to PDF, and upload it to Supabase Storage. Optionally, create a new
-            policy version record.
+            render a preview, convert to PDF, and upload it to Supabase Storage. If no Policy ID is provided,
+            we’ll create a new policy automatically, attach this file as a version, and publish it.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-6">
+          <div className="text-xs text-muted-foreground">
+            Debug: file={String(!!file)}, htmlLen={docHtml.length}, btnDisabled={(!file || !docHtml || isUploading) ? "yes" : "no"}
+          </div>
+
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="docx">Word Document (.docx)</Label>
@@ -315,7 +389,7 @@ const UploadPolicyDocs = () => {
             <div className="space-y-2">
               <Label>Policy ID (optional)</Label>
               <Input
-                placeholder="UUID of policy (to create a policy_versions row)"
+                placeholder="Leave blank to auto-create a Policy"
                 value={policyId}
                 onChange={(e) => setPolicyId(e.target.value)}
               />
@@ -340,11 +414,7 @@ const UploadPolicyDocs = () => {
             </div>
             <div className="space-y-2">
               <Label>Number</Label>
-              <Input
-                value={number}
-                onChange={(e) => setNumber(e.target.value)}
-                placeholder="e.g., 8.01.01"
-              />
+              <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="e.g., 8.01.01" />
             </div>
             <div className="space-y-2">
               <Label>Subject</Label>
@@ -397,7 +467,6 @@ const UploadPolicyDocs = () => {
             </Button>
           </div>
 
-          {/* Live HTML preview (before PDF) */}
           <div>
             <h3 className="text-sm font-medium text-muted-foreground mb-2">Formatted Preview</h3>
             <div
