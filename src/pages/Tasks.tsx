@@ -3,16 +3,22 @@ import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import TaskKPIHeader from "@/components/tasks/TaskKPIHeader";
 import TaskGrid from "@/components/tasks/TaskGrid";
+import TaskBoard from "@/components/tasks/TaskBoard";
+import TaskTimeline from "@/components/tasks/TaskTimeline";
 import CreateTaskDialog from "@/components/tasks/CreateTaskDialog";
 import { Button } from "@/components/ui/button";
-import { Plus, ListTodo } from "lucide-react";
+import { Plus, ListTodo, Columns, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
+type TaskView = "grid" | "board" | "timeline";
+
+// Task view management
 const Tasks = () => {
   const navigate = useNavigate();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentView, setCurrentView] = useState<TaskView>("grid");
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -35,7 +41,7 @@ const Tasks = () => {
     checkAuth();
   }, [navigate]);
 
-  const canManageTasks = userRole === "admin" || userRole === "publisher";
+  const canManageTasks = userRole !== null; // Show for all authenticated users
 
   if (isLoading) {
     return (
@@ -73,8 +79,41 @@ const Tasks = () => {
         {/* KPIs */}
         <TaskKPIHeader />
 
-        {/* Task Grid */}
-        <TaskGrid />
+        {/* View Toggle */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant={currentView === "grid" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setCurrentView("grid")}
+            className="flex items-center gap-2"
+          >
+            <ListTodo className="h-4 w-4" />
+            Grid
+          </Button>
+          <Button
+            variant={currentView === "board" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setCurrentView("board")}
+            className="flex items-center gap-2"
+          >
+            <Columns className="h-4 w-4" />
+            Board
+          </Button>
+          <Button
+            variant={currentView === "timeline" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setCurrentView("timeline")}
+            className="flex items-center gap-2"
+          >
+            <Calendar className="h-4 w-4" />
+            Timeline
+          </Button>
+        </div>
+
+        {/* Task Views */}
+        {currentView === "grid" && <TaskGrid />}
+        {currentView === "board" && <TaskBoard />}
+        {currentView === "timeline" && <TaskTimeline />}
 
         {/* Create Dialog */}
         <CreateTaskDialog

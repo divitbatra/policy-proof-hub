@@ -20,6 +20,7 @@ import GroupDetail from "./pages/GroupDetail";
 import UploadSamplePolicies from "./pages/UploadSamplePolicies";
 import PopulatePolicySamples from "./pages/PopulatePolicySamples";
 import Tasks from "./pages/Tasks";
+import PPDUBrief from "./pages/PPDUBrief";
 
 const queryClient = new QueryClient();
 

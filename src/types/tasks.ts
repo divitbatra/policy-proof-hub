@@ -9,6 +9,7 @@ export interface Task {
   description: string | null;
   status: TaskStatus;
   priority: TaskPriority;
+  start_date: string | null;
   due_date: string | null;
   tags: string[];
   created_by: string;
@@ -56,6 +57,7 @@ export interface CreateTaskInput {
   description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
+  start_date?: string | null;
   due_date?: string | null;
   tags?: string[];
   assignee_ids?: string[];

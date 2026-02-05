@@ -165,6 +165,7 @@ export function useCreateTask() {
           description: input.description || null,
           status: input.status || "not_started",
           priority: input.priority || "medium",
+          start_date: input.start_date || null,
           due_date: input.due_date || null,
           tags: input.tags || [],
           created_by: user.id,
