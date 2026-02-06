@@ -2,18 +2,62 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
+
+    // --- Authentication & Authorization ---
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      console.error('Auth error:', claimsError);
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const authenticatedUserId = claimsData.claims.sub;
+
+    // Check user role
+    const { data: profile, error: profileError } = await authClient
+      .from('profiles')
+      .select('role')
+      .eq('id', authenticatedUserId)
+      .single();
+
+    if (profileError || !profile || !['admin', 'publisher'].includes(profile.role)) {
+      console.error('Forbidden: user role is', profile?.role);
+      return new Response(JSON.stringify({ error: 'Forbidden: admin or publisher role required' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log(`Authenticated user ${authenticatedUserId} with role ${profile.role}`);
+
+    // --- Business Logic (uses service role for admin operations) ---
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
@@ -35,8 +79,6 @@ Deno.serve(async (req) => {
     for (const policy of policies) {
       console.log(`Processing policy: ${policy.title}`);
 
-      // Generate a simple PDF placeholder (since we can't access public folder from edge function)
-      // Create a minimal PDF structure
       const pdfContent = `%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -76,7 +118,6 @@ startxref
       
       const pdfBlob = new Blob([pdfContent], { type: 'application/pdf' });
 
-      // Upload to storage
       const fileName = `${policy.id}/sample_document_v1.pdf`;
       const { error: uploadError } = await supabase.storage
         .from('policy-documents')
@@ -90,16 +131,13 @@ startxref
         continue;
       }
 
-      // Get the public URL
       const { data: urlData } = supabase.storage
         .from('policy-documents')
         .getPublicUrl(fileName);
 
-      // Get current version or create new one
       let versionId = policy.current_version_id;
       
       if (!versionId) {
-        // Create a new version
         const { data: newVersion, error: versionError } = await supabase
           .from('policy_versions')
           .insert({
@@ -120,13 +158,11 @@ startxref
 
         versionId = newVersion.id;
 
-        // Update policy with current_version_id
         await supabase
           .from('policies')
           .update({ current_version_id: versionId })
           .eq('id', policy.id);
       } else {
-        // Update existing version
         await supabase
           .from('policy_versions')
           .update({
@@ -155,7 +191,7 @@ startxref
   } catch (error) {
     console.error('Error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: 'An internal error occurred' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,

@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Bold,
@@ -84,17 +84,31 @@ const HIGHLIGHT_COLORS = [
 
 const PPDUEditor = ({ content, onContentChange }: PPDUEditorProps) => {
   const editorRef = useRef<HTMLDivElement>(null);
+  const isInternalChange = useRef(false);
+
+  // Only sync content from parent when it changes externally (template load, import, etc.)
+  useEffect(() => {
+    if (isInternalChange.current) {
+      isInternalChange.current = false;
+      return;
+    }
+    if (editorRef.current && editorRef.current.innerHTML !== content) {
+      editorRef.current.innerHTML = content;
+    }
+  }, [content]);
 
   const execCommand = useCallback((command: string, value?: string) => {
     document.execCommand(command, false, value);
     editorRef.current?.focus();
     if (editorRef.current) {
+      isInternalChange.current = true;
       onContentChange(editorRef.current.innerHTML);
     }
   }, [onContentChange]);
 
   const handleInput = () => {
     if (editorRef.current) {
+      isInternalChange.current = true;
       onContentChange(editorRef.current.innerHTML);
     }
   };
@@ -528,7 +542,6 @@ const PPDUEditor = ({ content, onContentChange }: PPDUEditorProps) => {
           lineHeight: "1.5",
         }}
         onInput={handleInput}
-        dangerouslySetInnerHTML={{ __html: content }}
         onPaste={(e) => {
           // Allow rich paste for tables and formatting
           const html = e.clipboardData.getData("text/html");

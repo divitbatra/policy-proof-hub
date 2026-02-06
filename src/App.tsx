@@ -22,6 +22,7 @@ import UploadSamplePolicies from "./pages/UploadSamplePolicies";
 import PopulatePolicySamples from "./pages/PopulatePolicySamples";
 import Tasks from "./pages/Tasks";
 import PPDUBrief from "./pages/PPDUBrief";
+import ProjectIntakeForm from "./pages/ProjectIntakeForm";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
           <Route path="/dashboard/settings" element={<Settings />} />
           <Route path="/dashboard/tasks" element={<Tasks />} />
           <Route path="/dashboard/ppdu-brief" element={<PPDUBrief />} />
+          <Route path="/dashboard/project-intake" element={<ProjectIntakeForm />} />
           <Route path="/upload-docs" element={<UploadPolicyDocs />} />
           <Route path="/populate-test-data" element={<PopulateTestData />} />
           <Route path="/cleanup-users" element={<CleanupUsers />} />

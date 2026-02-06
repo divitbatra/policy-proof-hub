@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Shield, FileText, Users, BarChart, Settings, LogOut, FileCheck, Hexagon, ListTodo, FileEdit } from "lucide-react";
+import { Shield, FileText, Users, BarChart, Settings, LogOut, FileCheck, Hexagon, ListTodo, FileEdit, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 
 interface DashboardLayoutProps {
@@ -24,6 +24,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: FileCheck, label: "Pending Attestations", href: "/dashboard/attestations" },
     { icon: ListTodo, label: "Tasks", href: "/dashboard/tasks" },
     { icon: FileEdit, label: "PPDU Brief", href: "/dashboard/ppdu-brief" },
+    { icon: ClipboardList, label: "Project Intake", href: "/dashboard/project-intake" },
     { icon: Users, label: "Groups", href: "/dashboard/groups" },
     { icon: Settings, label: "Settings", href: "/dashboard/settings" }
   ];

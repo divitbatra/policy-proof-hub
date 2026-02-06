@@ -2,19 +2,62 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
+
+    // --- Authentication & Authorization ---
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      console.error('Auth error:', claimsError);
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const userId = claimsData.claims.sub;
+
+    // Check user role - only admin allowed
+    const { data: profile, error: profileError } = await authClient
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single();
+
+    if (profileError || !profile || profile.role !== 'admin') {
+      console.error('Forbidden: user role is', profile?.role);
+      return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log(`Authenticated admin user ${userId}`);
+
+    // --- Business Logic (uses service role for admin operations) ---
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
@@ -24,19 +67,9 @@ Deno.serve(async (req) => {
 
     console.log('Starting cleanup process...');
 
-    // Get the admin user ID
-    const { data: adminProfile, error: adminError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', 'divitbatra1102@gmail.com')
-      .single();
-
-    if (adminError || !adminProfile) {
-      throw new Error('Admin user not found');
-    }
-
-    const adminUserId = adminProfile.id;
-    console.log(`Found admin user: ${adminUserId}`);
+    // Use the authenticated user as the protected user
+    const adminUserId = userId;
+    console.log(`Protecting current admin user: ${adminUserId}`);
 
     // Delete attestations for other users
     const { error: attestationsError } = await supabase
@@ -131,7 +164,6 @@ Deno.serve(async (req) => {
         success: true,
         message: 'Cleanup completed successfully',
         deletedUsers: deletedAuthUsers,
-        keptUser: 'divitbatra1102@gmail.com'
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -141,9 +173,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error in cleanup:', error);
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }),
+      JSON.stringify({ error: 'An internal error occurred' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,

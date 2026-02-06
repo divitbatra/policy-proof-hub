@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
 // Real policy content samples
@@ -256,8 +256,52 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    
+
+    // --- Authentication & Authorization ---
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    })
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token)
+    if (claimsError || !claimsData?.claims) {
+      console.error('Auth error:', claimsError)
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const authenticatedUserId = claimsData.claims.sub
+
+    // Check user role - only admin allowed
+    const { data: profile, error: profileError } = await authClient
+      .from('profiles')
+      .select('role')
+      .eq('id', authenticatedUserId)
+      .single()
+
+    if (profileError || !profile || profile.role !== 'admin') {
+      console.error('Forbidden: user role is', profile?.role)
+      return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    console.log(`Authenticated admin user ${authenticatedUserId}`)
+
+    // --- Business Logic (uses service role for admin operations) ---
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
@@ -267,22 +311,16 @@ Deno.serve(async (req) => {
 
     console.log('Starting cleanup and population...')
 
-    // 1. Get current user ID FIRST (before any deletions)
-    const { data: { users: allUsers } } = await supabaseAdmin.auth.admin.listUsers()
-    const currentUser = allUsers?.find(u => u.email === 'divitbatra1102@gmail.com')
-    
-    if (!currentUser) {
-      throw new Error('Current user (divitbatra1102@gmail.com) not found')
-    }
-    
-    console.log(`Found current user: ${currentUser.id}`)
+    // Use authenticated user as the protected user
+    const currentUserId = authenticatedUserId
 
     // 2. Get all users to delete (except the protected one)
+    const { data: { users: allUsers } } = await supabaseAdmin.auth.admin.listUsers()
     const usersToDelete: string[] = []
     
     if (allUsers) {
       for (const user of allUsers) {
-        if (user.email !== 'divitbatra1102@gmail.com') {
+        if (user.id !== currentUserId) {
           usersToDelete.push(user.id)
         }
       }
@@ -312,11 +350,11 @@ Deno.serve(async (req) => {
       await supabaseAdmin.from('profiles').delete().in('id', usersToDelete)
       
       console.log('Deleting auth users...')
-      for (const userId of usersToDelete) {
+      for (const uid of usersToDelete) {
         try {
-          await supabaseAdmin.auth.admin.deleteUser(userId)
+          await supabaseAdmin.auth.admin.deleteUser(uid)
         } catch (error) {
-          console.error(`Error deleting user ${userId}:`, error)
+          console.error(`Error deleting user ${uid}:`, error)
         }
       }
     }
@@ -347,7 +385,7 @@ Deno.serve(async (req) => {
         description: template.description,
         category: template.category,
         status: 'published',
-        created_by: currentUser.id
+        created_by: currentUserId
       })
       
       // Insert in batches
@@ -382,9 +420,8 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: 'An internal error occurred' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,

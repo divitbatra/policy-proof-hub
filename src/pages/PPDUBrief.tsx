@@ -3,6 +3,8 @@ import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import mammoth from "mammoth";
+import loadHTMLToDOCX from "@/utils/htmlToDocx";
+
 import PPDUEditor from "@/components/ppdu/PPDUEditor";
 import PPDUToolbar from "@/components/ppdu/PPDUToolbar";
 import { PPDU_BRIEF_TEMPLATE, generateDownloadHtml } from "@/components/ppdu/ppduTemplates";
@@ -31,16 +33,26 @@ const PPDUBrief = () => {
     toast.success("Document saved locally");
   };
 
-  const handleDownload = () => {
-    const htmlContent = generateDownloadHtml(documentTitle, content);
-    const blob = new Blob([htmlContent], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${documentTitle.replace(/\s+/g, "_")}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Document downloaded");
+  const handleDownload = async () => {
+    try {
+      const htmlContent = generateDownloadHtml(documentTitle, content);
+      const convert = await loadHTMLToDOCX();
+      const docxBlob = await convert(htmlContent, undefined, {
+        table: { row: { cantSplit: true } },
+        font: "Calibri",
+        fontSize: 22,
+      });
+      const url = URL.createObjectURL(docxBlob as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${documentTitle.replace(/\s+/g, "_")}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Document downloaded as DOCX");
+    } catch (error) {
+      console.error("Error generating DOCX:", error);
+      toast.error("Failed to download document");
+    }
   };
 
   const handleImportClick = () => {

@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Upload, FileText, CheckCircle, AlertCircle } from "lucide-react";
 import * as mammoth from "mammoth";
-import html2pdf from "html2pdf.js";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 import DOMPurify from "dompurify";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -610,7 +611,7 @@ function wrapWithPolicyTemplate(opts: {
         page-break-inside: avoid;
       }
 
-      .page-break, .html2pdf__page-break {
+      .page-break {
         break-before: page;
         page-break-before: always;
         height: 0; border: 0; margin: 0; padding: 0;
@@ -836,25 +837,61 @@ const UploadPolicyDocs = () => {
         PDF_BASE_MARGIN_MM,
       ];
 
-      const opt = {
-        margin,
-        filename: makePdfName(file?.name ?? "policy.docx", number, subject),
-        image: { type: "jpeg" as const, quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const },
-        pagebreak: { mode: ["css", "legacy"], avoid: ["h2", "h3", "table", "tr"] },
-      };
 
-      const pdf = await (html2pdf() as any).from(target).set(opt as any).toPdf().get("pdf");
+      // Render HTML to canvas using html2canvas
+      const canvas = await html2canvas(target, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
 
-      const total =
-        typeof (pdf.internal as any).getNumberOfPages === "function"
-          ? (pdf.internal as any).getNumberOfPages()
-          : (() => {
-              const pages = (pdf.internal as any).pages;
-              if (Array.isArray(pages) && pages.length > 1) return pages.length - 1;
-              return 1;
-            })();
+      // Create jsPDF instance
+      const pdf = new jsPDF({
+        unit: "mm",
+        format: "a4",
+        orientation: "portrait",
+      });
+
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+
+      // Calculate content area dimensions
+      const contentW = pageW - margin[1] - margin[3]; // left + right margins
+      const contentH = pageH - margin[0] - margin[2]; // top + bottom margins
+
+      // Scale canvas to fit the content width
+      const imgW = contentW;
+      const imgH = (canvas.height * contentW) / canvas.width;
+
+      // Calculate how many pages are needed
+      const totalPages = Math.ceil(imgH / contentH);
+
+      for (let i = 0; i < totalPages; i++) {
+        if (i > 0) pdf.addPage();
+
+        // Calculate the portion of the canvas for this page
+        const sourceY = (i * contentH / imgH) * canvas.height;
+        const sourceH = Math.min((contentH / imgH) * canvas.height, canvas.height - sourceY);
+
+        // Create a temporary canvas for this page slice
+        const pageCanvas = document.createElement("canvas");
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sourceH;
+        const ctx = pageCanvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(
+            canvas,
+            0, sourceY, canvas.width, sourceH,
+            0, 0, canvas.width, sourceH
+          );
+        }
+
+        const pageImgData = pageCanvas.toDataURL("image/jpeg", 0.98);
+        const sliceH = (sourceH / canvas.height) * imgH;
+        pdf.addImage(pageImgData, "JPEG", margin[3], margin[0], imgW, sliceH);
+      }
+
+      const total = totalPages;
 
       // Load logo once and reuse
       const logoDataUrl = await fetchAsDataUrl(ALBERTA_LOGO_URL);

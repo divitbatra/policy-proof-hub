@@ -2,34 +2,29 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-// Policy categories and sample titles
 const policyCategories = [
-  'Code of Conduct',
-  'Data Security',
-  'Remote Work',
-  'Expense Reimbursement',
-  'Leave Policy',
-  'Health & Safety',
-  'IT Security',
-  'Procurement',
-  'Training & Development',
-  'Performance Management',
-  'Client Relations',
-  'Conflict of Interest',
-  'Confidentiality',
-  'Workplace Harassment',
-  'Emergency Procedures'
+  'Compliance',
+  'HR',
+  'Finance',
+  'Operations',
+  'Legal',
+  'Technology',
+  'Security',
+  'Privacy'
 ]
 
-const generatePolicyTitle = (index: number, category: string) => {
-  return `${category} Policy - Version ${Math.floor(index / policyCategories.length) + 1}`
+const generatePolicyTitle = (index: number): string => {
+  const categoryIndex = index % policyCategories.length
+  const category = policyCategories[categoryIndex]
+  const policyNumber = Math.floor(index / policyCategories.length) + 1
+  return `${category} Policy ${policyNumber}`
 }
 
-const generatePolicyDescription = (category: string) => {
-  return `This policy outlines the guidelines and procedures for ${category.toLowerCase()} within the organization. All employees must review and acknowledge this policy.`
+const generatePolicyDescription = (title: string): string => {
+  return `This is a sample description for the ${title}. It provides guidelines and regulations related to ${title.split(' ')[0].toLowerCase()} within the organization.`
 }
 
 Deno.serve(async (req) => {
@@ -39,8 +34,52 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    
+
+    // --- Authentication & Authorization ---
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    })
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token)
+    if (claimsError || !claimsData?.claims) {
+      console.error('Auth error:', claimsError)
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const authenticatedUserId = claimsData.claims.sub
+
+    // Check user role - only admin allowed
+    const { data: profile, error: profileError } = await authClient
+      .from('profiles')
+      .select('role')
+      .eq('id', authenticatedUserId)
+      .single()
+
+    if (profileError || !profile || profile.role !== 'admin') {
+      console.error('Forbidden: user role is', profile?.role)
+      return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    console.log(`Authenticated admin user ${authenticatedUserId}`)
+
+    // --- Business Logic (uses service role for admin operations) ---
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
@@ -90,26 +129,23 @@ Deno.serve(async (req) => {
     console.log('Creating/updating users...')
     let userIndex = 1
     const allUserIds: string[] = []
-    const BATCH_SIZE = 10 // Process 10 users at a time
+    const BATCH_SIZE = 10
 
     for (const group of groupsWithCounts) {
       const userIds: string[] = []
       
-      // Process users in batches
       for (let batchStart = 0; batchStart < group.userCount; batchStart += BATCH_SIZE) {
         const batchEnd = Math.min(batchStart + BATCH_SIZE, group.userCount)
         const batchPromises = []
 
         for (let i = batchStart; i < batchEnd; i++) {
           const email = `user${userIndex + i - batchStart}@apex-demo.com`
-          const password = 'Demo123!'
+          const password = crypto.randomUUID().slice(0, 16) + 'A1!'
           const fullName = `${group.name} User ${i + 1}`
           
-          // Check if user exists in our map
           const existingUserId = existingUsersMap.get(email)
           
           if (existingUserId) {
-            // User exists, just update profile and use their ID
             const updatePromise = supabaseAdmin
               .from('profiles')
               .upsert({
@@ -123,7 +159,6 @@ Deno.serve(async (req) => {
             
             batchPromises.push(updatePromise)
           } else {
-            // Create new user
             const createPromise = supabaseAdmin.auth.admin.createUser({
               email,
               password,
@@ -137,41 +172,38 @@ Deno.serve(async (req) => {
                 return null
               }
 
-              const userId = authData.user.id
+              const uid = authData.user.id
               
-              // Insert profile
               await supabaseAdmin
                 .from('profiles')
                 .upsert({
-                  id: userId,
+                  id: uid,
                   email: email,
                   full_name: fullName,
                   department: group.name,
                   role: group.name === 'Admin' ? 'admin' : 'employee'
                 }, { onConflict: 'id' })
 
-              return userId
+              return uid
             })
             
             batchPromises.push(createPromise)
           }
         }
 
-        // Wait for batch to complete
         const batchResults = await Promise.all(batchPromises)
         const validUserIds = batchResults.filter(id => id !== null) as string[]
         userIds.push(...validUserIds)
         allUserIds.push(...validUserIds)
         
-        userIndex += (batchEnd - batchStart) // Increment by actual batch size
+        userIndex += (batchEnd - batchStart)
         console.log(`Processed batch for ${group.name}, total users so far: ${allUserIds.length}`)
       }
 
-      // Add users to group in one operation
       if (userIds.length > 0) {
-        const groupMembers = userIds.map(userId => ({
+        const groupMembers = userIds.map(uid => ({
           group_id: group.id,
-          user_id: userId
+          user_id: uid
         }))
 
         const { error: memberError } = await supabaseAdmin
@@ -194,16 +226,6 @@ Deno.serve(async (req) => {
         message: 'Users populated successfully',
         stats: {
           users: allUserIds.length
-        },
-        loginInfo: {
-          message: 'You can login with any user. All passwords are: Demo123!',
-          exampleUsers: [
-            'user1@apex-demo.com (Directors)',
-            'user16@apex-demo.com (Executive Directors)',
-            'user21@apex-demo.com (Admin)',
-            'user41@apex-demo.com (SPO)',
-            'user91@apex-demo.com (PO)'
-          ]
         }
       }),
       {
@@ -214,9 +236,8 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: 'An internal error occurred' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
