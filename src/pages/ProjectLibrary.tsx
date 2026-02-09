@@ -28,6 +28,7 @@ const ProjectLibrary = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [userRole, setUserRole] = useState<string>("");
+  const [currentUserId, setCurrentUserId] = useState<string>("");
 
   useEffect(() => {
     fetchProjects();
@@ -37,6 +38,7 @@ const ProjectLibrary = () => {
   const fetchUserRole = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
+      setCurrentUserId(user.id);
       const { data } = await supabase
         .from("profiles")
         .select("role")
@@ -166,7 +168,7 @@ const ProjectLibrary = () => {
                         {project.title}
                       </CardDescription>
                     </div>
-                    {userRole === "admin" && (
+                    {(userRole === "admin" || currentUserId === project.created_by) && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -175,6 +177,7 @@ const ProjectLibrary = () => {
                           handleDelete(project.id, project.project_name);
                         }}
                         className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        title="Delete project"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
